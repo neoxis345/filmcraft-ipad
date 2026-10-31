@@ -19,7 +19,16 @@ use std::sync::{Arc, Mutex, PoisonError};
 use crate::{PixelData, VideoFrame};
 
 /// Bytes of idle buffers kept per sample type; a buffer that does not fit is freed.
+#[cfg(not(target_os = "ios"))]
 const MAX_BYTES: usize = 192 << 20;
+// iPadOS: idle buffers count against the app's memory limit (shared with the GPU).
+#[cfg(target_os = "ios")]
+const MAX_BYTES: usize = 64 << 20;
+
+/// [`MAX_BYTES`], sized to the iPad's memory on iPadOS ([`crate::device`]).
+fn max_bytes() -> usize {
+    if cfg!(target_os = "ios") { crate::device::scaled(MAX_BYTES, 32 << 20, 192 << 20) } else { MAX_BYTES }
+}
 
 /// Smaller buffers are not worth keeping (the allocator recycles those well).
 const MIN_BYTES: usize = 64 << 10;
@@ -72,7 +81,15 @@ static REUSED: AtomicU64 = AtomicU64::new(0);
 static F32: Mutex<Vec<Vec<f32>>> = Mutex::new(Vec::new());
 
 /// Bytes of idle float images kept; a buffer that does not fit is freed.
+#[cfg(not(target_os = "ios"))]
 const F32_MAX_BYTES: usize = 320 << 20;
+#[cfg(target_os = "ios")]
+const F32_MAX_BYTES: usize = 96 << 20;
+
+/// [`F32_MAX_BYTES`], sized to the iPad's memory on iPadOS ([`crate::device`]).
+fn f32_max_bytes() -> usize {
+    if cfg!(target_os = "ios") { crate::device::scaled(F32_MAX_BYTES, 48 << 20, 320 << 20) } else { F32_MAX_BYTES }
+}
 
 fn take<T>(shelf: &Mutex<Shelf<T>>, len: usize) -> Vec<T> {
     let found = shelf.lock().unwrap_or_else(PoisonError::into_inner).take(len);
@@ -88,7 +105,7 @@ fn take<T>(shelf: &Mutex<Shelf<T>>, len: usize) -> Vec<T> {
 fn give<T>(shelf: &Mutex<Shelf<T>>, plane: Arc<Vec<T>>) {
     // a plane something else still shows (a monitor, a GPU upload in flight) is theirs
     if let Ok(b) = Arc::try_unwrap(plane) {
-        shelf.lock().unwrap_or_else(PoisonError::into_inner).give(b, MAX_BYTES);
+        shelf.lock().unwrap_or_else(PoisonError::into_inner).give(b, max_bytes());
     }
 }
 
@@ -124,7 +141,7 @@ pub fn recycle_f32(buf: Vec<f32>) {
     }
     let mut idle = F32.lock().unwrap_or_else(PoisonError::into_inner);
     let held: usize = idle.iter().map(|b| b.len().saturating_mul(4)).sum();
-    if held.saturating_add(bytes) <= F32_MAX_BYTES {
+    if held.saturating_add(bytes) <= f32_max_bytes() {
         idle.push(buf);
     }
 }

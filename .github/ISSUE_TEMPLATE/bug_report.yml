@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Please report one problem per issue and search existing issues first.
-        For security vulnerabilities, follow [SECURITY.md](https://github.com/storytold/filmcraft/blob/main/SECURITY.md) instead of posting sensitive details here.
+        For security vulnerabilities, follow [SECURITY.md](https://github.com/neoxis345/filmcraft-ipad/blob/main/SECURITY.md) instead of posting sensitive details here.
   - type: input
     id: version
     attributes:

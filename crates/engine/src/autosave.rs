@@ -511,7 +511,7 @@ pub fn default_data_dir() -> Option<PathBuf> {
     if let Some(d) = std::env::current_exe().ok().and_then(|exe| exe.parent().and_then(portable_data_dir)) {
         return Some(d);
     }
-    if cfg!(target_os = "macos") {
+    if cfg!(any(target_os = "macos", target_os = "ios")) {
         return env("HOME").map(|h| h.join("Library/Application Support/FilmCraft"));
     }
     if cfg!(windows) {

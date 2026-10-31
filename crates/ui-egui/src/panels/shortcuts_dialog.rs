@@ -68,7 +68,7 @@ fn egui_key(name: &str) -> Option<egui::Key> {
 /// Canonical chord text from an egui key event.
 pub fn chord_of(key: egui::Key, m: egui::Modifiers) -> Option<String> {
     let name = KEYS.iter().find(|k| egui_key(k) == Some(key))?;
-    let mods = Mods { cmd: m.command || m.mac_cmd, ctrl: m.ctrl && cfg!(target_os = "macos"), alt: m.alt, shift: m.shift };
+    let mods = Mods { cmd: m.command || m.mac_cmd, ctrl: m.ctrl && cfg!(any(target_os = "macos", target_os = "ios")), alt: m.alt, shift: m.shift };
     Some(format!("{}{}", mods.prefix(), name))
 }
 
@@ -146,7 +146,7 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
     record(app, ctx);
     let t = app.tokens;
     let screen = ctx.content_rect();
-    let size = vec2((screen.width() - 40.0).clamp(760.0, 1320.0), (screen.height() - 60.0).clamp(560.0, 900.0));
+    let size = vec2((screen.width() - 32.0).clamp(320.0, 1320.0), (screen.height() - 32.0).clamp(360.0, 900.0));
     let mut close: Option<bool> = None; // Some(true) = OK, Some(false) = Cancel
     let mut open = true;
     egui::Window::new(tl!("Keyboard Shortcuts"))
@@ -163,7 +163,7 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
             ui.set_width(size.x);
             header(app, ui, &t);
             ui.add_space(8.0);
-            let kb_h = (size.y * 0.42).clamp(220.0, 360.0);
+            let kb_h = (size.y * 0.42).clamp(160.0, 360.0);
             let (kb, _) = ui.allocate_exact_size(vec2(size.x, kb_h), Sense::hover());
             keyboard(app, ui, kb, &t);
             legend(ui, &t);
@@ -446,7 +446,7 @@ fn key_legend(name: &str, mac: bool) -> String {
 }
 
 fn keyboard(app: &mut FilmcraftApp, ui: &mut egui::Ui, area: Rect, t: &Tokens) {
-    let mac = cfg!(target_os = "macos");
+    let mac = cfg!(any(target_os = "macos", target_os = "ios"));
     // held modifiers count as the filter too (outside recording)
     let held = ui.input(|i| i.modifiers);
     let mut mods = app.shortcut_editor.mods;

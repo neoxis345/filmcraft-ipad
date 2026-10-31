@@ -346,6 +346,21 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect, which: Which)
     if which == Which::Source && show_picture && pic_resp.drag_started() && app.ui.tool != crate::state::Tool::Hand {
         crate::panels::source_drag::begin(app, ui, true, true);
     }
+    // A Project/Media Browser item can be opened in Source by dropping it on the monitor. The
+    // shared project-item accessor also recognizes the SourceDrag payload used by the Timeline;
+    // opening that item here is harmless and keeps the target usable across panels.
+    if which == Which::Source
+        && let Some(item) = crate::panels::dragged_project_item(ui)
+        && ui.rect_contains_pointer(video_area)
+    {
+        ui.painter().rect_stroke(video_area, 0.0, Stroke::new(2.0, app.tokens.accent), StrokeKind::Inside);
+        if ui.input(|i| i.pointer.any_released()) {
+            if let Err(e) = app.session.execute("source.open", json!({"item": item.0})) {
+                app.ui.status = e.to_string();
+            }
+            crate::panels::clear_drag(ui);
+        }
+    }
     if pic_resp.double_clicked() && which == Which::Source {
         // (Premiere opens the clip's settings; we show info)
         app.ui.status = name.clone();

@@ -109,6 +109,17 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, p: PanelKind, rect: Rect)
     }
 }
 
+/// On iPad, two-finger UIKit scrolling supplies the wheel event. The egui content-drag source must
+/// be disabled in panels whose children are draggable, otherwise the parent steals a one-finger
+/// clip/effect drag before the child crosses its slop threshold.
+pub fn touch_scroll_source() -> egui::containers::scroll_area::ScrollSource {
+    if cfg!(target_os = "ios") {
+        egui::containers::scroll_area::ScrollSource { drag: egui::containers::scroll_area::DragScroll::Never, ..Default::default() }
+    } else {
+        Default::default()
+    }
+}
+
 pub mod source_drag;
 pub mod source_range;
 

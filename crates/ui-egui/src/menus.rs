@@ -139,9 +139,6 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     uic!("mode.import", "Import", [], None),
     uic!("mode.edit", "Edit", [], None),
     uic!("mode.export", "Export", ["File", "Export"], Some("Cmd+M")),
-    uic!("help.discord", "Join the ArtCraft Discord…", ["Help"], None),
-    uic!("help.website", "ArtCraft Website", ["Help"], None),
-    uic!("help.appPage", "FilmCraft on getartcraft.com", ["Help"], None),
     uic!("help.github", "FilmCraft on GitHub", ["Help"], None),
     uic!("help.reportIssue", "Report an Issue…", ["Help"], None),
     uic!("help.revealLogFiles", "Reveal Log Files…", ["Help"], None),
@@ -824,7 +821,7 @@ pub fn parse_shortcut(s: &str) -> Option<(egui::Modifiers, egui::Key)> {
     let mut m = egui::Modifiers::NONE;
     let mut key = None;
     let parts: Vec<&str> = if s == "+" { vec!["+"] } else { s.split('+').collect() };
-    let mac = cfg!(target_os = "macos");
+    let mac = cfg!(any(target_os = "macos", target_os = "ios"));
     for p in parts {
         match p {
             "Cmd" => m.command = true,
@@ -934,6 +931,43 @@ pub fn menu_bar(app: &mut FilmcraftApp, ui: &mut egui::Ui) {
             titles.push(r.response);
         }
         switch_on_hover(ui.ctx(), &titles);
+    });
+    if let Some(id) = clicked {
+        let _ = invoke(app, &ctx, &id, json!({}));
+    }
+}
+
+/// The width the menu bar's titles need in `ui` (points).
+pub fn menu_bar_width(app: &FilmcraftApp, ui: &egui::Ui) -> f32 {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let pad = ui.spacing().button_padding.x * 2.0 + ui.spacing().item_spacing.x;
+    ui.fonts_mut(|f| MENUS.iter().map(|top| f.layout_no_wrap(app.ui.language.tr(top).to_string(), font.clone(), egui::Color32::WHITE).size().x + pad).sum())
+}
+
+/// The menu bar folded into one "Menus" button (a narrow window, an iPad in portrait): every
+/// top-level menu is a submenu of it, with the same items and commands as the full bar.
+pub fn menu_bar_compact(app: &mut FilmcraftApp, ui: &mut egui::Ui) {
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("interface-language"), app.ui.language));
+    let items = menu_items(app);
+    let labels = app.session.prefs.labels.clone();
+    let ctx = ui.ctx().clone();
+    let mut clicked: Option<String> = None;
+    egui::MenuBar::new().style(crate::theme::menu_style).config(egui::containers::menu::MenuConfig::new().style(crate::theme::menu_style)).ui(ui, |ui| {
+        let r = ui.menu_button(format!("\u{2630}  {}", tl!("Menus")), |ui| {
+            ui.set_min_width(220.0);
+            for top in MENUS {
+                let mine: Vec<&MenuItem> = items.iter().filter(|i| i.path.first().map(String::as_str) == Some(top)).collect();
+                let sub = ui.menu_button(app.ui.language.tr(top), |ui| {
+                    ui.set_min_width(260.0);
+                    if mine.is_empty() {
+                        ui.add_enabled(false, egui::Button::new(tl!("(empty)")));
+                    }
+                    menu_level(ui, &mine, 1, &mut clicked, &mut app.auto, &labels);
+                });
+                app.auto.add(&format!("menu.{top}"), sub.response.rect, top);
+            }
+        });
+        app.auto.add("menu.compact", r.response.rect, "Menus");
     });
     if let Some(id) = clicked {
         let _ = invoke(app, &ctx, &id, json!({}));

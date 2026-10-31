@@ -1,0 +1,46 @@
+[package]
+name = "filmcraft-ios"
+description = "FilmCraft for iPadOS: the Rust half of the UIKit host (egui + wgpu on a CAMetalLayer, touch, keyboard, device profile)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# A static library linked into the Xcode app (packaging/ios), and an rlib so the host logic (touch,
+# keyboard, device profile, the frame loop without a GPU) is tested on every system.
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+# The workspace lints, except that `unsafe_code` is `deny` instead of `forbid`: only the FFI module
+# (C entry points the Swift side calls, and the Swift functions it calls back) opts in.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+too_many_arguments = "allow"
+needless_range_loop = "allow"
+type_complexity = "allow"
+undocumented_unsafe_blocks = "deny"
+
+[dependencies]
+filmcraft-engine = { workspace = true }
+filmcraft-export = { workspace = true }
+filmcraft-frame = { workspace = true }
+filmcraft-gpu = { workspace = true }
+filmcraft-platform = { workspace = true }
+filmcraft-project = { workspace = true }
+filmcraft-render = { workspace = true }
+filmcraft-time = { workspace = true }
+filmcraft-ui-egui = { workspace = true }
+egui = { workspace = true }
+# The same eframe as the UI crate: its re-exported wgpu and egui-wgpu, and `Frame` for `App::ui`.
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
+serde_json = { workspace = true }
+subtle = "2.6"
+log = { workspace = true }
+chrono = { workspace = true, features = ["clock"] }
+# The desktop app's cpal audio output and voice-over input, shared as source (apps/filmcraft/src).
+cpal = "0.16"
+pollster = "0.4"

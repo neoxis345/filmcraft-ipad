@@ -311,6 +311,7 @@ fn migrate_legacy_effects(root: &mut DockNode) {
 pub fn workspace(name: &str) -> DockNode {
     use PanelKind::*;
     use SplitSize::*;
+    let editing_top_split = if cfg!(target_os = "ios") { Ratio(0.70) } else { FixedB(450.0) };
     let bottom_editing = || hsplit(FixedA(64.0), tabs(&[Tools], 0), hsplit(FixedB(116.0), tabs(&[Timeline], 0), tabs(&[AudioMeters], 0)));
     match name {
         "Assembly" => vsplit(
@@ -372,7 +373,7 @@ pub fn workspace(name: &str) -> DockNode {
         _ => vsplit(
             Ratio(0.57),
             hsplit(
-                FixedB(450.0),
+                editing_top_split,
                 hsplit(Ratio(0.5), tabs(&[Source, EffectControls, AudioClipMixer, Metadata], 0), tabs(&[Program], 0)),
                 tabs(&[Properties, EssentialGraphics, Text], 0),
             ),

@@ -160,6 +160,23 @@ fn sync_sequence(app: &mut FilmcraftApp) {
 
 pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
+    if rect.width() < 900.0 {
+        // The three desktop columns cannot fit side by side in portrait or Split View. Stack them
+        // in a bounded vertical scroller so no Rect has an inverted (negative) width.
+        egui::ScrollArea::vertical().id_salt("export-narrow-scroll").auto_shrink([false, false]).show(ui, |ui| {
+            ui.set_min_width(rect.width().max(320.0));
+            let (left, _) = ui.allocate_exact_size(vec2(ui.available_width(), 220.0), egui::Sense::hover());
+            queue_column(app, ui, left);
+            let (mid, _) = ui.allocate_exact_size(vec2(ui.available_width(), 620.0), egui::Sense::hover());
+            settings_column(app, ui, mid);
+            if let Some(seq_id) = app.session.state.active_sequence {
+                let (right, _) = ui.allocate_exact_size(vec2(ui.available_width(), 420.0), egui::Sense::hover());
+                preview_column(app, ui, right, seq_id);
+            }
+        });
+        preset_manager(app, ui.ctx());
+        return;
+    }
     let left = Rect::from_min_size(rect.min, vec2(300.0, rect.height()));
     let right = Rect::from_min_max(pos2(rect.max.x - (rect.width() * 0.4).clamp(360.0, 640.0), rect.min.y), rect.max);
     let mid = Rect::from_min_max(pos2(left.max.x + 4.0, rect.min.y), pos2(right.min.x - 4.0, rect.max.y));

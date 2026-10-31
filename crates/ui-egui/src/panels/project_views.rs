@@ -223,7 +223,10 @@ pub fn item_interactions(
         crate::panels::start_drag_item(ui, id);
     }
     if menu {
-        resp.context_menu(|ui| item_menu(app, ui, id, kind, actions));
+        resp.context_menu(|ui| {
+            let max_height = (ui.ctx().content_rect().height() - 24.0).max(180.0);
+            egui::ScrollArea::vertical().id_salt("project-item-menu-scroll").max_height(max_height).show(ui, |ui| item_menu(app, ui, id, kind, actions));
+        });
     }
 }
 
@@ -495,19 +498,23 @@ pub fn list_view(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect, v: &View
     let mut bui = ui.new_child(egui::UiBuilder::new().max_rect(body).id_salt((&v.prefix, "list-body")));
     bui.set_clip_rect(body.intersect(ui.clip_rect()));
     let root = app.session.project.root.find_bin(v.bin).cloned().unwrap_or_default();
-    let out = egui::ScrollArea::both().id_salt((&v.prefix, "list-scroll")).auto_shrink([false, false]).show(&mut bui, |ui| {
-        ui.set_min_width(lc.width);
-        let bg = background(ui, v);
-        let mut row = 0usize;
-        list_bin(app, ui, &root, 0, filter, &mut row, actions, v, &lc);
-        if v.inst == Inst::Main && v.bin == app.session.project.root.id {
-            let mut draw = |app: &mut FilmcraftApp, ui: &mut egui::Ui, bin: &Bin, row: &mut usize, actions: &mut Actions| {
-                list_bin(app, ui, bin, 1, "", row, actions, v, &lc);
-            };
-            crate::panels::menu_dialogs::search_bin_rows(app, ui, &mut row, actions, &mut draw);
-        }
-        empty_space(app, ui, v, &bg, actions);
-    });
+    let out = egui::ScrollArea::both()
+        .id_salt((&v.prefix, "list-scroll"))
+        .scroll_source(crate::panels::touch_scroll_source())
+        .auto_shrink([false, false])
+        .show(&mut bui, |ui| {
+            ui.set_min_width(lc.width);
+            let bg = background(ui, v);
+            let mut row = 0usize;
+            list_bin(app, ui, &root, 0, filter, &mut row, actions, v, &lc);
+            if v.inst == Inst::Main && v.bin == app.session.project.root.id {
+                let mut draw = |app: &mut FilmcraftApp, ui: &mut egui::Ui, bin: &Bin, row: &mut usize, actions: &mut Actions| {
+                    list_bin(app, ui, bin, 1, "", row, actions, v, &lc);
+                };
+                crate::panels::menu_dialogs::search_bin_rows(app, ui, &mut row, actions, &mut draw);
+            }
+            empty_space(app, ui, v, &bg, actions);
+        });
     // pinned header, scrolled horizontally with the rows
     let hr = Rect::from_min_size(rect.min, vec2(rect.width(), header_h));
     let hp = ui.painter().with_clip_rect(hr.intersect(ui.clip_rect()));
@@ -959,38 +966,41 @@ pub fn icon_view(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect, v: &View
         Vec::new()
     };
     let n = bins.len() + ids.len();
-    egui::ScrollArea::vertical().id_salt((&v.prefix, "icon-scroll")).auto_shrink([false, false]).show(ui, |ui| {
-        let bg = background(ui, v);
-        let per_row = ((rect.width() - 12.0) / cell.x).floor().max(1.0) as usize;
-        if v.inst == Inst::Main {
-            app.ui.keys.icon_columns = per_row;
-        }
-        let rows = n.div_ceil(per_row);
-        for rr in 0..rows {
-            let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), cell.y), Sense::hover());
-            for k in 0..per_row {
-                let i = rr * per_row + k;
-                if i >= n {
-                    break;
-                }
-                let r = Rect::from_min_size(pos2(row.min.x + 12.0 + k as f32 * cell.x, row.min.y + 8.0), vec2(size, th_h + 20.0));
-                if i < bins.len() {
-                    bin_card(app, ui, r, &bins[i], v, actions);
-                    continue;
-                }
-                let id = ids[i - bins.len()];
-                let Some(kind) = app.session.project.item(id).map(|x| x.kind.clone()) else { continue };
-                let was_selected = app.session.state.project_selection.contains(&id);
-                if let Some(resp) = card(app, ui, r, id, &v.prefix, true, true, Sense::click_and_drag()) {
-                    note_hit(ui, v, id, r);
-                    let name_r = Rect::from_min_max(pos2(r.min.x, r.min.y + th_h), r.max);
-                    slow_click_rename(app, ui, &resp, name_r, id, was_selected);
-                    item_interactions(app, ui, v, &resp, id, &kind, actions, true, true);
+    egui::ScrollArea::vertical().id_salt((&v.prefix, "icon-scroll")).scroll_source(crate::panels::touch_scroll_source()).auto_shrink([false, false]).show(
+        ui,
+        |ui| {
+            let bg = background(ui, v);
+            let per_row = ((rect.width() - 12.0) / cell.x).floor().max(1.0) as usize;
+            if v.inst == Inst::Main {
+                app.ui.keys.icon_columns = per_row;
+            }
+            let rows = n.div_ceil(per_row);
+            for rr in 0..rows {
+                let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), cell.y), Sense::hover());
+                for k in 0..per_row {
+                    let i = rr * per_row + k;
+                    if i >= n {
+                        break;
+                    }
+                    let r = Rect::from_min_size(pos2(row.min.x + 12.0 + k as f32 * cell.x, row.min.y + 8.0), vec2(size, th_h + 20.0));
+                    if i < bins.len() {
+                        bin_card(app, ui, r, &bins[i], v, actions);
+                        continue;
+                    }
+                    let id = ids[i - bins.len()];
+                    let Some(kind) = app.session.project.item(id).map(|x| x.kind.clone()) else { continue };
+                    let was_selected = app.session.state.project_selection.contains(&id);
+                    if let Some(resp) = card(app, ui, r, id, &v.prefix, true, true, Sense::click_and_drag()) {
+                        note_hit(ui, v, id, r);
+                        let name_r = Rect::from_min_max(pos2(r.min.x, r.min.y + th_h), r.max);
+                        slow_click_rename(app, ui, &resp, name_r, id, was_selected);
+                        item_interactions(app, ui, v, &resp, id, &kind, actions, true, true);
+                    }
                 }
             }
-        }
-        empty_space(app, ui, v, &bg, actions);
-    });
+            empty_space(app, ui, v, &bg, actions);
+        },
+    );
 }
 
 // ------------------------------------------------------------------------------------ freeform
@@ -1011,7 +1021,7 @@ pub fn freeform_view(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect, v: &
         })
     };
     let extent = cards.iter().fold(vec2(rect.width(), rect.height()), |e, c| vec2(e.x.max(c.x + c.size + 40.0), e.y.max(c.y + c.size * 9.0 / 16.0 + 60.0)));
-    egui::ScrollArea::both().id_salt((&v.prefix, "ff-scroll")).auto_shrink([false, false]).show(ui, |ui| {
+    egui::ScrollArea::both().id_salt((&v.prefix, "ff-scroll")).scroll_source(crate::panels::touch_scroll_source()).auto_shrink([false, false]).show(ui, |ui| {
         ui.data_mut(|d| d.remove::<Vec<(u64, Rect)>>(hits_id(v)));
         let (canvas, bg) = ui.allocate_exact_size(extent, Sense::click_and_drag());
         app.auto.add(&format!("{}.freeform", v.prefix), canvas, "Freeform canvas");

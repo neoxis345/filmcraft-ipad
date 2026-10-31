@@ -261,30 +261,33 @@ fn tree(app: &mut FilmcraftApp, ui: &mut egui::Ui, r: Rect, dir: &str) {
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(r.shrink2(vec2(4.0, 0.0))).id_salt("mb-tree"));
     child.set_clip_rect(r.intersect(ui.clip_rect()));
     let mut go: Option<String> = None;
-    egui::ScrollArea::vertical().id_salt("mb-tree-scroll").auto_shrink([false, false]).show(&mut child, |ui| {
-        let sections: [(&str, &str, Icon); 4] = [
-            ("favorites", tl!("Favorites"), Icon::Star),
-            ("localDrives", tl!("Local Drives"), Icon::Drive),
-            ("network", tl!("Network"), Icon::Network),
-            ("recent", tl!("Recent Directories"), Icon::Clock),
-        ];
-        for (key, title, icon) in sections {
-            let list: Vec<(String, String)> = roots[key]
-                .as_array()
-                .map(|a| a.iter().filter_map(|v| Some((v["name"].as_str()?.to_string(), v["path"].as_str()?.to_string()))).collect())
-                .unwrap_or_default();
-            let hr = ui.label(egui::RichText::new(title).size(11.0).color(app.tokens.text_dim).strong());
-            app.auto.add(&format!("mediaBrowser.tree.{key}"), hr.rect, title);
-            if list.is_empty() {
-                ui.label(egui::RichText::new(tl!("  (none)")).size(10.5).color(app.tokens.text_faint));
+    egui::ScrollArea::vertical().id_salt("mb-tree-scroll").scroll_source(crate::panels::touch_scroll_source()).auto_shrink([false, false]).show(
+        &mut child,
+        |ui| {
+            let sections: [(&str, &str, Icon); 4] = [
+                ("favorites", tl!("Favorites"), Icon::Star),
+                ("localDrives", tl!("Local Drives"), Icon::Drive),
+                ("network", tl!("Network"), Icon::Network),
+                ("recent", tl!("Recent Directories"), Icon::Clock),
+            ];
+            for (key, title, icon) in sections {
+                let list: Vec<(String, String)> = roots[key]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|v| Some((v["name"].as_str()?.to_string(), v["path"].as_str()?.to_string()))).collect())
+                    .unwrap_or_default();
+                let hr = ui.label(egui::RichText::new(title).size(11.0).color(app.tokens.text_dim).strong());
+                app.auto.add(&format!("mediaBrowser.tree.{key}"), hr.rect, title);
+                if list.is_empty() {
+                    ui.label(egui::RichText::new(tl!("  (none)")).size(10.5).color(app.tokens.text_faint));
+                }
+                for (name, path) in list {
+                    let expandable = matches!(key, "localDrives" | "network" | "favorites");
+                    node(app, ui, &ctx, &name, &path, icon, 0, expandable, dir, key, &mut go);
+                }
+                ui.add_space(6.0);
             }
-            for (name, path) in list {
-                let expandable = matches!(key, "localDrives" | "network" | "favorites");
-                node(app, ui, &ctx, &name, &path, icon, 0, expandable, dir, key, &mut go);
-            }
-            ui.add_space(6.0);
-        }
-    });
+        },
+    );
     if let Some(p) = go {
         exec(app, &ctx, "mediaBrowser.navigate", json!({"path": p}));
         refresh(&ctx);
@@ -516,60 +519,63 @@ fn list(app: &mut FilmcraftApp, ui: &mut egui::Ui, r: Rect, entries: &[Entry], c
     let needs_probe =
         columns.iter().any(|c| matches!(c.as_str(), "Frame Rate" | "Media Duration" | "Video Info" | "Audio Info" | "Video Codec" | "Audio Codec"));
     let mut probes_left = 2;
-    let out = egui::ScrollArea::both().id_salt("mb-list-scroll").auto_shrink([false, false]).show(&mut child, |ui| {
-        ui.set_min_width(total.max(body.width()));
-        for (i, e) in entries.iter().enumerate() {
-            let (rr, resp) = ui.allocate_exact_size(vec2(total.max(body.width()), ROW_H), Sense::click_and_drag());
-            let sel = app.session.browser.selection.contains(&e.path);
-            if sel {
-                ui.painter().rect_filled(rr, 0.0, t.row_selected);
-            } else if i % 2 == 1 {
-                ui.painter().rect_filled(rr, 0.0, t.row_alt);
-            }
-            let info = if needs_probe && !e.is_dir {
-                let cached = app.session.browser.probes.contains_key(&e.path);
-                if cached || probes_left > 0 {
-                    if !cached {
-                        probes_left -= 1;
-                        ctx.request_repaint();
+    let out = egui::ScrollArea::both().id_salt("mb-list-scroll").scroll_source(crate::panels::touch_scroll_source()).auto_shrink([false, false]).show(
+        &mut child,
+        |ui| {
+            ui.set_min_width(total.max(body.width()));
+            for (i, e) in entries.iter().enumerate() {
+                let (rr, resp) = ui.allocate_exact_size(vec2(total.max(body.width()), ROW_H), Sense::click_and_drag());
+                let sel = app.session.browser.selection.contains(&e.path);
+                if sel {
+                    ui.painter().rect_filled(rr, 0.0, t.row_selected);
+                } else if i % 2 == 1 {
+                    ui.painter().rect_filled(rr, 0.0, t.row_alt);
+                }
+                let info = if needs_probe && !e.is_dir {
+                    let cached = app.session.browser.probes.contains_key(&e.path);
+                    if cached || probes_left > 0 {
+                        if !cached {
+                            probes_left -= 1;
+                            ctx.request_repaint();
+                        }
+                        mb::probe(&mut app.session, &e.path)
+                    } else {
+                        None
                     }
-                    mb::probe(&mut app.session, &e.path)
                 } else {
                     None
+                };
+                let mut x = rr.min.x + 4.0;
+                for (c, w) in columns.iter().zip(&widths) {
+                    let cr = Rect::from_min_size(pos2(x, rr.min.y), vec2(*w, ROW_H));
+                    let p = ui.painter().with_clip_rect(cr.shrink2(vec2(2.0, 0.0)).intersect(ui.clip_rect()));
+                    if c == "Name" {
+                        let icon = match e.kind {
+                            "folder" => Icon::Folder,
+                            "audio" => Icon::Audio,
+                            "image" => Icon::Image,
+                            "video" => Icon::Film,
+                            "caption" => Icon::Captions,
+                            _ => Icon::Sequence,
+                        };
+                        let col = if e.is_dir { Color32::from_rgb(237, 150, 58) } else { t.icon };
+                        icons::paint(&p, Rect::from_center_size(pos2(cr.min.x + 9.0, cr.center().y), vec2(14.0, 14.0)), icon, col);
+                        p.text(pos2(cr.min.x + 22.0, cr.center().y), Align2::LEFT_CENTER, &e.name, Tokens::ui(12.0), t.text);
+                    } else {
+                        p.text(pos2(cr.min.x + 4.0, cr.center().y), Align2::LEFT_CENTER, mb::column_text(e, c, info.as_ref()), Tokens::ui(11.5), t.text_dim);
+                    }
+                    x += w;
                 }
-            } else {
-                None
-            };
-            let mut x = rr.min.x + 4.0;
-            for (c, w) in columns.iter().zip(&widths) {
-                let cr = Rect::from_min_size(pos2(x, rr.min.y), vec2(*w, ROW_H));
-                let p = ui.painter().with_clip_rect(cr.shrink2(vec2(2.0, 0.0)).intersect(ui.clip_rect()));
-                if c == "Name" {
-                    let icon = match e.kind {
-                        "folder" => Icon::Folder,
-                        "audio" => Icon::Audio,
-                        "image" => Icon::Image,
-                        "video" => Icon::Film,
-                        "caption" => Icon::Captions,
-                        _ => Icon::Sequence,
-                    };
-                    let col = if e.is_dir { Color32::from_rgb(237, 150, 58) } else { t.icon };
-                    icons::paint(&p, Rect::from_center_size(pos2(cr.min.x + 9.0, cr.center().y), vec2(14.0, 14.0)), icon, col);
-                    p.text(pos2(cr.min.x + 22.0, cr.center().y), Align2::LEFT_CENTER, &e.name, Tokens::ui(12.0), t.text);
-                } else {
-                    p.text(pos2(cr.min.x + 4.0, cr.center().y), Align2::LEFT_CENTER, mb::column_text(e, c, info.as_ref()), Tokens::ui(11.5), t.text_dim);
-                }
-                x += w;
+                app.auto.add(&format!("mediaBrowser.entry.{}", e.name), rr.intersect(ui.clip_rect()), &e.name);
+                entry_interactions(app, ui, &resp, e, entries);
             }
-            app.auto.add(&format!("mediaBrowser.entry.{}", e.name), rr.intersect(ui.clip_rect()), &e.name);
-            entry_interactions(app, ui, &resp, e, entries);
-        }
-        let rest = ui.available_rect_before_wrap();
-        let resp = ui.allocate_rect(Rect::from_min_size(rest.min, vec2(rest.width(), rest.height().max(30.0))), Sense::click());
-        if resp.clicked() {
-            exec(app, &ctx, "mediaBrowser.select", json!({"paths": []}));
-        }
-    });
+            let rest = ui.available_rect_before_wrap();
+            let resp = ui.allocate_rect(Rect::from_min_size(rest.min, vec2(rest.width(), rest.height().max(30.0))), Sense::click());
+            if resp.clicked() {
+                exec(app, &ctx, "mediaBrowser.select", json!({"paths": []}));
+            }
+        },
+    );
     let hp = ui.painter().with_clip_rect(header.intersect(ui.clip_rect()));
     hp.rect_filled(header, 0.0, t.panel_bg);
     hp.line_segment([header.left_bottom(), header.right_bottom()], Stroke::new(1.0, t.separator));
@@ -651,67 +657,70 @@ fn thumbnails(app: &mut FilmcraftApp, ui: &mut egui::Ui, r: Rect, entries: &[Ent
     let per_row = ((r.width() - 8.0) / cell.x).floor().max(1.0) as usize;
     let mut probes_left = 2;
     app.ui.media_browser.hover = None;
-    egui::ScrollArea::vertical().id_salt("mb-thumb-scroll").auto_shrink([false, false]).show(&mut child, |ui| {
-        for chunk in entries.chunks(per_row) {
-            let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), cell.y), Sense::hover());
-            for (k, e) in chunk.iter().enumerate() {
-                let tr = Rect::from_min_size(pos2(row.min.x + 8.0 + k as f32 * cell.x, row.min.y + 6.0), vec2(size, th_h));
-                let resp = ui.interact(tr.expand(2.0), egui::Id::new(("mb-thumb", &e.path)), Sense::click_and_drag());
-                let sel = app.session.browser.selection.contains(&e.path);
-                ui.painter().rect_filled(tr, 3.0, Color32::from_gray(14));
-                if sel {
-                    ui.painter().rect_stroke(tr, 3.0, Stroke::new(2.0, t.accent), StrokeKind::Outside);
-                }
-                if e.is_dir {
-                    icons::paint(
-                        ui.painter(),
-                        Rect::from_center_size(tr.center(), vec2(th_h * 0.6, th_h * 0.6)),
-                        Icon::Folder,
-                        Color32::from_rgb(237, 150, 58),
-                    );
-                } else {
-                    let visible = ui.is_rect_visible(tr);
-                    if visible && matches!(e.kind, "video" | "image") && !app.session.browser.probes.contains_key(&e.path) && probes_left > 0 {
-                        probes_left -= 1;
-                        mb::probe(&mut app.session, &e.path);
-                        ctx.request_repaint();
+    egui::ScrollArea::vertical().id_salt("mb-thumb-scroll").scroll_source(crate::panels::touch_scroll_source()).auto_shrink([false, false]).show(
+        &mut child,
+        |ui| {
+            for chunk in entries.chunks(per_row) {
+                let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), cell.y), Sense::hover());
+                for (k, e) in chunk.iter().enumerate() {
+                    let tr = Rect::from_min_size(pos2(row.min.x + 8.0 + k as f32 * cell.x, row.min.y + 6.0), vec2(size, th_h));
+                    let resp = ui.interact(tr.expand(2.0), egui::Id::new(("mb-thumb", &e.path)), Sense::click_and_drag());
+                    let sel = app.session.browser.selection.contains(&e.path);
+                    ui.painter().rect_filled(tr, 3.0, Color32::from_gray(14));
+                    if sel {
+                        ui.painter().rect_stroke(tr, 3.0, Stroke::new(2.0, t.accent), StrokeKind::Outside);
                     }
-                    let frac = if hover_scrub && resp.hovered() {
-                        ctx.pointer_hover_pos().map(|p| ((p.x - tr.min.x) / tr.width()).clamp(0.0, 1.0)).unwrap_or(0.3)
+                    if e.is_dir {
+                        icons::paint(
+                            ui.painter(),
+                            Rect::from_center_size(tr.center(), vec2(th_h * 0.6, th_h * 0.6)),
+                            Icon::Folder,
+                            Color32::from_rgb(237, 150, 58),
+                        );
                     } else {
-                        0.3
-                    };
-                    if resp.hovered() {
-                        app.ui.media_browser.hover = Some((e.path.clone(), frac));
-                    }
-                    let drawn = visible && draw_preview(app, ui, &ctx, e, tr, frac);
-                    if !drawn {
-                        let icon = match e.kind {
-                            "audio" => Icon::Audio,
-                            "image" => Icon::Image,
-                            "caption" => Icon::Captions,
-                            "project" => Icon::Sequence,
-                            _ => Icon::Film,
+                        let visible = ui.is_rect_visible(tr);
+                        if visible && matches!(e.kind, "video" | "image") && !app.session.browser.probes.contains_key(&e.path) && probes_left > 0 {
+                            probes_left -= 1;
+                            mb::probe(&mut app.session, &e.path);
+                            ctx.request_repaint();
+                        }
+                        let frac = if hover_scrub && resp.hovered() {
+                            ctx.pointer_hover_pos().map(|p| ((p.x - tr.min.x) / tr.width()).clamp(0.0, 1.0)).unwrap_or(0.3)
+                        } else {
+                            0.3
                         };
-                        icons::paint(ui.painter(), Rect::from_center_size(tr.center(), vec2(26.0, 26.0)), icon, t.text_faint);
+                        if resp.hovered() {
+                            app.ui.media_browser.hover = Some((e.path.clone(), frac));
+                        }
+                        let drawn = visible && draw_preview(app, ui, &ctx, e, tr, frac);
+                        if !drawn {
+                            let icon = match e.kind {
+                                "audio" => Icon::Audio,
+                                "image" => Icon::Image,
+                                "caption" => Icon::Captions,
+                                "project" => Icon::Sequence,
+                                _ => Icon::Film,
+                            };
+                            icons::paint(ui.painter(), Rect::from_center_size(tr.center(), vec2(26.0, 26.0)), icon, t.text_faint);
+                        }
+                        if hover_scrub && resp.hovered() {
+                            let x = tr.min.x + tr.width() * frac;
+                            ui.painter().line_segment([pos2(x, tr.min.y), pos2(x, tr.max.y)], Stroke::new(1.0, Color32::from_rgb(0x5a, 0x9b, 0xf0)));
+                        }
                     }
-                    if hover_scrub && resp.hovered() {
-                        let x = tr.min.x + tr.width() * frac;
-                        ui.painter().line_segment([pos2(x, tr.min.y), pos2(x, tr.max.y)], Stroke::new(1.0, Color32::from_rgb(0x5a, 0x9b, 0xf0)));
-                    }
+                    ui.painter().with_clip_rect(Rect::from_min_max(pos2(tr.min.x, tr.max.y), pos2(tr.max.x, tr.max.y + 22.0))).text(
+                        pos2(tr.min.x, tr.max.y + 11.0),
+                        Align2::LEFT_CENTER,
+                        &e.name,
+                        Tokens::ui(11.5),
+                        t.text,
+                    );
+                    app.auto.add(&format!("mediaBrowser.entry.{}", e.name), tr, &e.name);
+                    entry_interactions(app, ui, &resp, e, entries);
                 }
-                ui.painter().with_clip_rect(Rect::from_min_max(pos2(tr.min.x, tr.max.y), pos2(tr.max.x, tr.max.y + 22.0))).text(
-                    pos2(tr.min.x, tr.max.y + 11.0),
-                    Align2::LEFT_CENTER,
-                    &e.name,
-                    Tokens::ui(11.5),
-                    t.text,
-                );
-                app.auto.add(&format!("mediaBrowser.entry.{}", e.name), tr, &e.name);
-                entry_interactions(app, ui, &resp, e, entries);
             }
-        }
-    });
+        },
+    );
 }
 
 fn draw_preview(app: &mut FilmcraftApp, ui: &egui::Ui, ctx: &egui::Context, e: &Entry, r: Rect, frac: f32) -> bool {

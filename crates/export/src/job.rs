@@ -85,7 +85,22 @@ pub const INTERLEAVE: i64 = 16;
 
 /// Most bytes of rendered frames an overlapped export keeps in flight (the batch being encoded and
 /// the one being rendered), see [`overlap_batch`].
+#[cfg(not(target_os = "ios"))]
 pub const IN_FLIGHT_BUDGET: u64 = 1 << 29;
+/// iPadOS: two 4K batches of 512 MiB would push a 4 GB iPad past its memory limit.
+#[cfg(target_os = "ios")]
+pub const IN_FLIGHT_BUDGET: u64 = 160 << 20;
+
+/// [`IN_FLIGHT_BUDGET`], sized to the iPad's memory on iPadOS (`filmcraft_frame::device`: from a
+/// 3 GB iPad 9 to a 16 GB iPad Pro, never past the desktop's).
+pub fn in_flight_budget() -> u64 {
+    if cfg!(target_os = "ios") {
+        let base = usize::try_from(IN_FLIGHT_BUDGET).unwrap_or(usize::MAX);
+        u64::try_from(filmcraft_frame::device::scaled(base, 96 << 20, 1 << 29)).unwrap_or(IN_FLIGHT_BUDGET)
+    } else {
+        IN_FLIGHT_BUDGET
+    }
+}
 
 /// One rendered picture: straight RGBA8, or for HDR exports the encoded R'G'B' floats.
 type Frame = (Vec<u8>, Vec<f32>);
@@ -271,7 +286,7 @@ impl Exporter {
             next: f0,
             batch: rayon::current_num_threads().clamp(2, 16) as i64,
             overlap: true,
-            budget: IN_FLIGHT_BUDGET,
+            budget: in_flight_budget(),
             ahead: None,
             overlapped_steps: 0,
             brand,

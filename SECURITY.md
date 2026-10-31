@@ -8,8 +8,7 @@ inputs, automation boundaries, dependencies or release artifacts are welcome.
 
 GitHub private vulnerability reporting is not currently enabled for this repository,
 and no dedicated private security address is documented. Contact the maintainers
-through the [project's existing community channels](https://discord.gg/artcraft)
-with a minimal, non-exploitable description and ask for a private transfer method.
+by opening an issue with a minimal, non-exploitable description and ask for a private transfer method.
 Do not publish a working exploit, malicious attachment, credential, private project,
 or sensitive crash dump in a public issue or chat. Wait for a private channel before
 sharing those details; if none is established, withhold sensitive material.

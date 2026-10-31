@@ -2106,6 +2106,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "filmcraft-ios"
+version = "0.13.0"
+dependencies = [
+ "chrono",
+ "cpal",
+ "eframe",
+ "egui",
+ "filmcraft-engine",
+ "filmcraft-export",
+ "filmcraft-frame",
+ "filmcraft-gpu",
+ "filmcraft-platform",
+ "filmcraft-project",
+ "filmcraft-render",
+ "filmcraft-time",
+ "filmcraft-ui-egui",
+ "log",
+ "pollster 0.4.0",
+ "serde_json",
+ "subtle",
+]
+
+[[package]]
 name = "filmcraft-isobmff"
 version = "0.13.0"
 dependencies = [

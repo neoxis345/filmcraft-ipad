@@ -479,7 +479,9 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
     let mut keep = true;
     let mut apply = false;
     let mut elems: Elems = Vec::new();
-    let max_h = ctx.content_rect().height() * 0.8;
+    let content = ctx.content_rect();
+    let width = (content.width() - 32.0).clamp(300.0, 620.0);
+    let max_h = (content.height() - 100.0).max(180.0);
     let title = if new_sequence { tl!("New Sequence") } else { tl!("Sequence Settings") };
     let tabs: &[(&str, &str)] = if new_sequence {
         &[("general", "General"), ("tracks", "Tracks")]
@@ -490,11 +492,11 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
         .id(egui::Id::new("Sequence Settings"))
         .collapsible(false)
         .resizable(false)
-        .default_width(620.0)
+        .default_width(width)
         .pivot(egui::Align2::CENTER_CENTER)
         .default_pos(crate::widgets::dialog_center(ctx))
         .show(ctx, |ui| {
-            ui.set_width(620.0);
+            ui.set_width(width);
             ui.horizontal(|ui| {
                 for &(id, label) in tabs {
                     let r = ui.selectable_label(d.tab == id, t(label));

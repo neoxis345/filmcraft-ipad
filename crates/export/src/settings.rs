@@ -68,10 +68,12 @@ impl H264Profile {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HardwareEncoding {
-    #[default]
+    // iPadOS: the hardware encoder is the cool, battery-friendly way to export on a tablet.
+    #[cfg_attr(not(target_os = "ios"), default)]
     Off,
     /// Use the hardware encoder when the system has one and it takes the settings; otherwise the
     /// software encoder.
+    #[cfg_attr(target_os = "ios", default)]
     Auto,
 }
 
@@ -86,8 +88,10 @@ pub enum HardwareEncoding {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GpuRendering {
+    // iPadOS: the A-series GPU composites several times faster than the CPU, and cooler.
+    #[cfg_attr(target_os = "ios", default)]
     Auto,
-    #[default]
+    #[cfg_attr(not(target_os = "ios"), default)]
     Off,
 }
 

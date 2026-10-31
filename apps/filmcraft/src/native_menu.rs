@@ -48,15 +48,12 @@ pub fn install(app: &FilmcraftApp, ctx: egui::Context) -> (Receiver<String>, Men
         native.push((it.clone(), mi.clone()));
         let _ = settings.append(&mi);
     }
-    // About and Discord repeat Help menu commands: same translated labels, updated with them
+    // About repeats the Help menu command: same translated label, updated with it.
     let label = |id: &str, english: &str| items.iter().find(|i| i.id == id).map_or_else(|| english.to_string(), |i| i.label.clone());
     let about = MenuItem::with_id("app.about", label("app.about", "About FilmCraft"), true, None);
-    let discord = MenuItem::with_id("help.discord", label("help.discord", "Join the ArtCraft Discord…"), true, None);
-    for (id, mi) in [("app.about", &about), ("help.discord", &discord)] {
-        if let Some(it) = items.iter().find(|i| i.id == id) {
-            // recorded as built (enabled, no shortcut), so the first update applies the real state
-            native.push((Item { enabled: true, shortcut: None, ..it.clone() }, mi.clone()));
-        }
+    if let Some(it) = items.iter().find(|i| i.id == "app.about") {
+        // recorded as built (enabled, no shortcut), so the first update applies the real state
+        native.push((Item { enabled: true, shortcut: None, ..it.clone() }, about.clone()));
     }
     // the predefined items keep their native actions; our text lets them follow the language
     let predefined = [
@@ -70,7 +67,6 @@ pub fn install(app: &FilmcraftApp, ctx: egui::Context) -> (Receiver<String>, Men
     let quit = MenuItem::with_id(quit_id, app.ui.language.tr(quit_label), true, quit_accel);
     let _ = app_menu.append_items(&[
         &about,
-        &discord,
         &PredefinedMenuItem::separator(),
         &settings,
         &PredefinedMenuItem::separator(),

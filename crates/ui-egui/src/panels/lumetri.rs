@@ -595,13 +595,29 @@ fn color_wheel(ui: &mut egui::Ui, e: &EffectInstance, mt: Tick, id: &str, lid: &
     p.line_segment([c - vec2(0.0, 6.0), c + vec2(0.0, 6.0)], Stroke::new(1.0, t.text_faint));
     let puck = c + vec2(v.x as f32, -v.y as f32) * (r_in - 4.0);
     p.circle_stroke(puck, 5.0, Stroke::new(1.5, Color32::WHITE));
-    if (resp.dragged() || resp.clicked())
+    let wheel_base = egui::Id::new(("lumetri-wheel-base", clip.0, idx, id));
+    if resp.drag_started() {
+        ui.data_mut(|d| d.insert_temp(wheel_base, [v.x as f32, v.y as f32]));
+    }
+    if resp.dragged() {
+        let base = ui.data(|d| d.get_temp::<[f32; 2]>(wheel_base)).unwrap_or([v.x as f32, v.y as f32]);
+        let delta = resp.drag_delta() / (r_in - 4.0);
+        actions.push(json!({
+            "clip": clip.0,
+            "effect": idx,
+            "param": id,
+            "value": [(base[0] + delta.x).clamp(-1.0, 1.0), (base[1] - delta.y).clamp(-1.0, 1.0)]
+        }));
+    } else if resp.clicked()
         && let Some(pos) = resp.interact_pointer_pos()
     {
         let d = (pos - c) / (r_in - 4.0);
         let len = d.length().min(1.0);
         let dir = if d.length() > 1e-6 { d / d.length() } else { d };
         actions.push(json!({"clip": clip.0, "effect": idx, "param": id, "value": [dir.x * len, -dir.y * len]}));
+    }
+    if resp.drag_stopped() {
+        ui.data_mut(|d| d.remove::<[f32; 2]>(wheel_base));
     }
     if resp.double_clicked() {
         actions.push(json!({"clip": clip.0, "effect": idx, "param": id, "value": [0.0, 0.0]}));

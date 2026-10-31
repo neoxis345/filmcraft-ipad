@@ -847,12 +847,17 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
     let Some(mut d) = app.ui.settings.take() else { return false };
     crate::widgets::revert_drag_on_escape(ctx, egui::Id::new("settings-dialog-before-drag"), &mut d);
     let t = app.tokens;
+    let screen = ctx.content_rect();
+    let width = (screen.width() - 32.0).clamp(320.0, W);
+    let height = (screen.height() - 32.0).max(300.0);
+    let body_h = (height - 120.0).clamp(180.0, BODY_H);
+    let list_w = (width * 0.30).clamp(140.0, LIST_W);
     let mut close = false;
     let mut apply = false;
     let resp = egui::Modal::new(egui::Id::new("settings-modal")).frame(modal_frame(&t)).show(ctx, |ui| {
-        ui.set_width(W);
+        ui.set_width(width);
         // title bar (Premiere keeps "Preferences" as the window title)
-        let (bar, _) = ui.allocate_exact_size(vec2(W, 30.0), Sense::hover());
+        let (bar, _) = ui.allocate_exact_size(vec2(width, 30.0), Sense::hover());
         ui.painter().rect_filled(bar, CornerRadius { nw: 10, ne: 10, sw: 0, se: 0 }, t.header_bg);
         ui.painter().text(bar.center(), Align2::CENTER_CENTER, tl!("Preferences"), Tokens::semibold(13.0), t.text_dim);
         app.auto.add("settings.window", bar, "Preferences");
@@ -860,10 +865,10 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
         ui.horizontal_top(|ui| {
             ui.add_space(20.0);
             // category list
-            let (list, _) = ui.allocate_exact_size(vec2(LIST_W, BODY_H), Sense::hover());
+            let (list, _) = ui.allocate_exact_size(vec2(list_w, body_h), Sense::hover());
             ui.painter().rect(list, 2.0, t.field_bg, Stroke::new(1.0, t.separator), egui::StrokeKind::Inside);
             for (i, c) in settings::categories().iter().enumerate() {
-                let row = Rect::from_min_size(list.min + vec2(1.0, 1.0 + i as f32 * ROW_H), vec2(LIST_W - 2.0, ROW_H));
+                let row = Rect::from_min_size(list.min + vec2(1.0, 1.0 + i as f32 * ROW_H), vec2((list_w - 2.0).max(1.0), ROW_H));
                 let r = ui.interact(row, egui::Id::new(("settings-cat", c.id)), Sense::click());
                 let sel = d.page == c.id;
                 if sel {
@@ -890,9 +895,9 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
             // the page
             let Some(cat) = settings::category(&d.page) else { return };
             ui.vertical(|ui| {
-                ui.set_width(W - LIST_W - 60.0);
-                ui.set_height(BODY_H);
-                let page = egui::ScrollArea::vertical().id_salt(("settings-page", cat.id)).auto_shrink([false, false]).max_height(BODY_H).show(ui, |ui| {
+                ui.set_width((width - list_w - 60.0).max(120.0));
+                ui.set_height(body_h);
+                let page = egui::ScrollArea::vertical().id_salt(("settings-page", cat.id)).auto_shrink([false, false]).max_height(body_h).show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 6.0;
                     rows(app, ui, &mut d, cat.rows);
                     if !d.message.is_empty() {

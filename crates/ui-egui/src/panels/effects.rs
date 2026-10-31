@@ -39,7 +39,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     let mut apply: Option<String> = None;
     let mut lumetri_apply: Option<String> = None;
     let mut preset_action: Option<(String, String)> = None;
-    egui::ScrollArea::vertical().id_salt("fx-scroll").auto_shrink([false, false]).show(&mut bui, |ui| {
+    egui::ScrollArea::vertical().id_salt("fx-scroll").scroll_source(crate::panels::touch_scroll_source()).auto_shrink([false, false]).show(&mut bui, |ui| {
         for &top in tops {
             if top == "Presets" {
                 let any = app.session.presets.all().iter().any(|p| crate::i18n::matches_query(&p.name, &filter));

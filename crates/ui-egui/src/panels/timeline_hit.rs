@@ -18,7 +18,7 @@ use crate::state::Tool;
 pub const ROLL_PX: f32 = 2.5;
 
 /// Widest an edge zone gets (px), on each side of a clip edge.
-pub const EDGE_PX: f32 = 7.0;
+pub const EDGE_PX: f32 = if cfg!(target_os = "ios") { 12.0 } else { 7.0 };
 
 /// The trim the Selection tool starts at an edit point: Cmd+Shift = roll, Cmd = ripple. With the
 /// Trim setting on (`no_modifier`), no modifier is needed: right on the cut (when a clip is on the

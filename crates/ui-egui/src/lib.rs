@@ -30,7 +30,6 @@ macro_rules! tlf {
 }
 
 pub mod automation;
-pub mod brand;
 pub mod calc;
 mod cjk;
 pub mod control;
@@ -162,8 +161,8 @@ pub struct HostHooks {
     /// running while the dialog is open (the desktop app on Linux, #260); without it the
     /// synchronous pickers above are used.
     pub run_dialog: Option<Box<dyn FnMut(native_dialogs::FileDialog) -> Receiver<Vec<String>>>>,
-    /// Open a URL in the system browser (Help menu links, About dialog, Discord button, Import
-    /// screen). Without it, or when it fails, links go through `egui::Context::open_url`, which
+    /// Open a URL in the system browser (Help menu links and About dialog). Without it, or when it
+    /// fails, links go through `egui::Context::open_url`, which
     /// opens a new tab on the web (the native egui backend is built without its `links` feature).
     pub open_url: Option<Box<dyn FnMut(&str) -> Result<(), String>>>,
     /// The operating system's light or dark appearance when egui cannot report it (Linux desktops
@@ -1984,7 +1983,7 @@ impl FilmcraftApp {
 
     /// Contextual hint for the status bar (Premiere shows tool/gesture hints here).
     fn hint_text(&self) -> String {
-        let mac = cfg!(target_os = "macos");
+        let mac = cfg!(any(target_os = "macos", target_os = "ios"));
         match self.ui.tool {
             state::Tool::Selection if mac => {
                 tl!("Click to select, or click in empty space and drag to marquee select. Use Shift, Opt, and Cmd for other options.")

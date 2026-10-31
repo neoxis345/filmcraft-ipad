@@ -6,7 +6,6 @@ body:
     attributes:
       value: |
         Please search existing issues and describe one feature per request.
-        For usage questions, visit the [community chat](https://discord.gg/artcraft).
   - type: textarea
     id: problem
     attributes:

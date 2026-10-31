@@ -245,7 +245,12 @@ impl Drop for DecodingGuard {
 /// A decoder keeps its reference and in-flight pictures (hundreds of MB for a frame-threaded
 /// 4K decoder), so only this many caches keep theirs once idle: a timeline's other clips make a
 /// new one when the playhead reaches them, which costs what a seek costs.
+// iPadOS: a 4 GB iPad (A14) shares its memory with the GPU and the system kills an app that
+// goes past its limit, so the caches there keep a fraction of what a desktop does.
+#[cfg(not(target_os = "ios"))]
 const MAX_LIVE_DECODERS: usize = 4;
+#[cfg(target_os = "ios")]
+const MAX_LIVE_DECODERS: usize = 2;
 
 /// A cache asked for a frame this recently may be needed again soon (the next clip being
 /// prefetched, a clip the user scrubs back to): it keeps its decoder up to [`HARD_DECODERS`], and
@@ -266,12 +271,31 @@ const RECENT: Duration = Duration::from_millis(500);
 
 /// Most decoders caches idle for [`RECENT`] to [`IDLE`] keep together (a composite of a few
 /// layers plus the clips just left behind).
+#[cfg(not(target_os = "ios"))]
 const HARD_DECODERS: usize = 8;
+#[cfg(target_os = "ios")]
+const HARD_DECODERS: usize = 4;
 
 /// Decoded frames all caches may hold together before idle ones give theirs up. Each cache also
 /// has its own budget, which alone let every clip on a timeline keep hundreds of MB of frames
 /// nobody was looking at.
+#[cfg(not(target_os = "ios"))]
 pub const FRAME_BUDGET: usize = 1 << 30;
+#[cfg(target_os = "ios")]
+pub const FRAME_BUDGET: usize = 288 << 20;
+
+/// The iPadOS budgets above are tuned for a 4 GB iPad: from a 3 GB iPad 9 to a 16 GB iPad Pro they
+/// follow the memory the host reported (`filmcraft_frame::device`), up to the desktop's values.
+/// Elsewhere they are the constants.
+fn frame_budget() -> usize {
+    if cfg!(target_os = "ios") { filmcraft_frame::device::scaled(FRAME_BUDGET, 128 << 20, 1 << 30) } else { FRAME_BUDGET }
+}
+fn max_live_decoders() -> usize {
+    if cfg!(target_os = "ios") { filmcraft_frame::device::scaled(MAX_LIVE_DECODERS, 1, 4) } else { MAX_LIVE_DECODERS }
+}
+fn hard_decoders() -> usize {
+    if cfg!(target_os = "ios") { filmcraft_frame::device::scaled(HARD_DECODERS, 2, 8) } else { HARD_DECODERS }
+}
 
 /// What the caches of a process share: the cap on live decoders and the frame budget.
 struct Pool {
@@ -336,7 +360,7 @@ impl Pool {
     /// The pool of every cache in the process.
     fn global() -> Arc<Pool> {
         static POOL: std::sync::OnceLock<Arc<Pool>> = std::sync::OnceLock::new();
-        POOL.get_or_init(|| Arc::new(Pool::new(MAX_LIVE_DECODERS, IDLE, FRAME_BUDGET).tiered(RECENT, HARD_DECODERS))).clone()
+        POOL.get_or_init(|| Arc::new(Pool::new(max_live_decoders(), IDLE, frame_budget()).tiered(RECENT, hard_decoders()))).clone()
     }
 
     fn register(&self, c: &Arc<Shared>) {
@@ -448,11 +472,22 @@ pub struct GopCache {
 
 /// The cache reserves room for this many small frames: a frame-threaded decoder runs up to ~2x
 /// its thread count ahead of the frame it returns, and playback prefetches ahead of the playhead.
+#[cfg(not(target_os = "ios"))]
 const MIN_FRAMES: usize = 64;
+#[cfg(target_os = "ios")]
+const MIN_FRAMES: usize = 24;
 /// A source cache never retains more decoded pixels than this, regardless of frame dimensions.
 /// In particular, untrusted VP9 `show_existing_frame` samples must not turn the small-frame
 /// reserve above into an unbounded number of full-resolution copies.
+#[cfg(not(target_os = "ios"))]
 const FRAME_CACHE_CEILING: usize = 384 << 20;
+#[cfg(target_os = "ios")]
+const FRAME_CACHE_CEILING: usize = 128 << 20;
+
+/// [`FRAME_CACHE_CEILING`], sized to the iPad's memory on iPadOS (see [`frame_budget`]).
+fn frame_cache_ceiling() -> usize {
+    if cfg!(target_os = "ios") { filmcraft_frame::device::scaled(FRAME_CACHE_CEILING, 64 << 20, 384 << 20) } else { FRAME_CACHE_CEILING }
+}
 
 /// A running decoder up to this many samples before the wanted sample's sync sample keeps going
 /// rather than restarting at the sync sample.
@@ -535,7 +570,7 @@ impl GopCache {
             pool: pool.clone(),
         });
         pool.register(&shared);
-        Self { shared, explicit_color, rotation: 0, crop: None, budget: FRAME_CACHE_CEILING }
+        Self { shared, explicit_color, rotation: 0, crop: None, budget: frame_cache_ceiling() }
     }
 
     /// Turn every decoded frame clockwise by `quarter_turns` × 90° (the container's display
@@ -572,8 +607,9 @@ impl GopCache {
 
     /// The small-frame reserve may use the configured cache budget, but may never enlarge it.
     fn cache_budget(&self, frame_bytes: usize) -> usize {
-        let reserve = MIN_FRAMES.saturating_mul(frame_bytes).min(FRAME_CACHE_CEILING);
-        self.budget.min(FRAME_CACHE_CEILING).max(reserve)
+        let ceiling = frame_cache_ceiling();
+        let reserve = MIN_FRAMES.saturating_mul(frame_bytes).min(ceiling);
+        self.budget.min(ceiling).max(reserve)
     }
 
     /// Cache a frame [`Self::finish`] has been applied to.
