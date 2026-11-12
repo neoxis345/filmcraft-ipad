@@ -42,5 +42,5 @@ subtle = "2.6"
 log = { workspace = true }
 chrono = { workspace = true, features = ["clock"] }
 # The desktop app's cpal audio output and voice-over input, shared as source (apps/filmcraft/src).
-cpal = "0.16"
-pollster = "0.4"
+cpal = "0.18"
+pollster = "1.0"
